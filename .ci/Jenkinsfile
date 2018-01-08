@@ -12,18 +12,13 @@ class Globals {
     static extensionBranch = "2.0.x-dev"
 }
 
-stage("Checkout") {
-    milestone 1
-    if (env.BRANCH_NAME =~ /^PR-/) {
-        userInput = input(message: 'Launch tests?', parameters: [
-            choice(choices: 'yes\nno', description: 'Run unit tests', name: 'launchUnitTests'),
-            choice(choices: 'yes\nno', description: 'Run integration tests', name: 'launchIntegrationTests'),
-        ])
+milestone 1
+if (env.BRANCH_NAME =~ /^PR-/) {
+    input 'Launch tests?'
+}
+milestone 2
 
-        launchUnitTests = userInput['launchUnitTests']
-        launchIntegrationTests = userInput['launchIntegrationTests']
-    }
-    milestone 2
+stage("Checkout") {
 
     podPHP(phpVersion, {
         checkout scm
@@ -45,56 +40,13 @@ stage("Checkout") {
    })
 }
 
-if (launchUnitTests.equals("yes")) {
-    stage("Unit tests") {
-        def tasks = [:]
+stage("Integration tests") {
+    def tasks = [:]
 
-        tasks["phpspec-7.1"] = {runPhpSpecTest(phpVersion)}
-        tasks["php-cs-fixer-7.1"] = {runPhpCsFixerTest(phpVersion)}
+    tasks["phpunit-7.1-ce"] = {runIntegrationTestCe(phpVersion)}
+    tasks["phpunit-7.1-ee"] = {runIntegrationTestEe(phpVersion)}
 
-        parallel tasks
-    }
-}
-
-if (launchIntegrationTests.equals("yes")) {
-    stage("Integration tests") {
-        def tasks = [:]
-
-        tasks["phpunit-7.1-ce"] = {runIntegrationTestCe(phpVersion)}
-        tasks["phpunit-7.1-ee"] = {runIntegrationTestEe(phpVersion)}
-
-        parallel tasks
-    }
-}
-
-def runPhpSpecTest(version) {
-    podPHP(version, {
-        try {
-            unstash "extended_attr"
-
-            sh "composer install --optimize-autoloader --no-interaction --no-progress --prefer-dist"
-            sh "mkdir -p aklogs/"
-            sh "./vendor/bin/phpspec run --no-interaction --format=junit > aklogs/phpspec.xml"
-        } finally {
-            sh "sed -i \"s/testcase name=\\\"/testcase name=\\\"[php-${version}] /\" aklogs/*.xml"
-            junit "aklogs/*.xml"
-        }
-    })
-}
-
-def runPhpCsFixerTest(version) {
-    podPHP(version, {
-        try {
-            unstash "extended_attr"
-
-            sh "composer install --optimize-autoloader --no-interaction --no-progress --prefer-dist"
-            sh "mkdir -p aklogs/"
-            sh "./vendor/bin/php-cs-fixer fix --diff --format=junit --config=.php_cs.php > aklogs/phpcs.xml"
-        } finally {
-            sh "sed -i \"s/testcase name=\\\"/testcase name=\\\"[php-${version}] /\" aklogs/*.xml"
-            junit "aklogs/*.xml"
-        }
-    })
+    parallel tasks
 }
 
 def runIntegrationTestCe(version) {
